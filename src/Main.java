@@ -1,9 +1,11 @@
 import org.w3c.dom.ls.LSOutput;
 
 import javax.imageio.ImageTypeSpecifier;
+import java.io.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.concurrent.*;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -18,16 +20,100 @@ public class Main {
      */
 
     static boolean printSingle= false;
-    static boolean testEquality = true;
 
     public static void main(String[] args) {
-        normalTest();
+//        normalTest(Main::alphaBeta,Main::recursiveGoodSpecialKgv,1,100,10000,true);
 
 //        specificTest(new int[]{1,6,9,16,22,28,31,34,37,39,46,49,53,57,69,78,81,84,87,89,91,95,98,101,103,104,108,111}, 3468736);
-//        lengthTest((m,k)->recursiveGoodSpecialLimit(m,k), 100,1000);
-//        lengthTest((m,k)->recursiveGoodSpecialKgv(m,k), 100,1000);
+//        lengthTest((m,k)->recursiveGoodSpecialLimit(m,k), 10000,1000);
+//        lengthTest((m,k)->recursiveGoodSpecialKgv(m,k), 10000,1000);
+        lengthTest((m,k)->alphaBetaKGVs(m,k),10000,10000);
+//        benchmarkTest((m,k)->alphaBetaKGVs(m,k,10),"benchHard.txt",true);
+        speedMap.forEach((v,k)-> {
+            int maxi=0;
+            for (int i = 1; i < k.length; i++) {
+                if(k[maxi]<k[i]) maxi=i;
+            }
+            System.out.println(v + " " +maxi);
+        }
+        );
+//        System.out.println(t1);
+//        System.out.println(t2);
+//        benchmarkTest(Main::alphaBetaRaw,"bench2.txt",false);
     }
+    private static long benchmarkTest(BiFunction<int[],Integer,int[]> func, String file, boolean testEquality){
+        int bars = 20;
+        for (int i = 0; i < bars; i++) {
+            System.out.print("_");
+        }
+        System.out.println();
+        var l = readBenchmark(file);
+        int loops = l.size();
+        long time = 0;
+        int i=0;
+        for (var data:
+             l) {
+            long t1 = System.nanoTime();
+            var sol = func.apply(data.m,data.k);
+            time += System.nanoTime()-t1;
+            if(testEquality){
+                int ourK = 0;
+                for (int j = 0; j < sol.length; j++) {
+                    ourK += sol[j];
+                }
+                if(ourK!=data.solN) System.out.println("Not Correct: "+(ourK- data.solN));
+            }
 
+            if(bars*i%loops==0)
+                System.out.print(".");
+            i++;
+        }
+        System.out.println();
+        System.out.println("Took: "+time/1000000+" MilliSeconds");
+        return time;
+    }
+    private static List<TestData> readBenchmark(String destin) {
+        List<TestData> list = new ArrayList<>();
+        File file = new File(destin);
+        try {
+            BufferedReader reader = new BufferedReader(new FileReader(file));
+            String s1,s2,s3,s4;
+            while((s1= reader.readLine())!=null) {
+                s2 = reader.readLine();
+                s3 = reader.readLine();
+                s4 = reader.readLine();
+                if(s2==null || s3 ==null|| s4 ==null) break;
+                list.add(new TestData(s1,s2,s3,s4));
+            }
+
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return list;
+    }
+    private static class TestData{
+        int k;
+        int[]m;
+        int solN;
+        int[]sol;
+        public TestData(String s1,String s2,String s3,String s4){
+            k = Integer.parseInt(s1);
+            m = new int[Integer.parseInt(s2)];
+            var o =Arrays.stream(s3.split(" ")).map(s -> Integer.parseInt(s)).toArray();
+            for (int i = 0; i < o.length; i++) {
+                m[i]=(int)o[i];
+            }
+            var p= s4.split(" ");
+            solN=Integer.parseInt(p[0]);
+            sol = new int[m.length];
+            for (int i = 0; i < m.length; i++) {
+                sol[i] = Integer.parseInt(p[i+1]);
+            }
+            Arrays.sort(m);
+        }
+    }
     private static void specificTest(int[] ints, int i) {
         Arrays.sort(ints);
         Wrapper w = new Wrapper();
@@ -44,7 +130,7 @@ public class Main {
             for (int j = 1; j < m.length; j++) {
                 m[j]= (int)(Math.random()*max)+1;
             }
-            int k = Arrays.stream(m).sum()+ (int)(Math.random()*10000000);
+            int k = Arrays.stream(m).sum()+ (int)(Math.random()*100000);
             Arrays.sort(m);
             boolean changed = true;
             while(changed){
@@ -63,6 +149,7 @@ public class Main {
                 final Future<int[]> f = service.submit(() -> func.apply(m,k));
                 f.get(timeLimit, TimeUnit.MILLISECONDS);
                 System.out.print(length+"; ");
+                if(length%30==0) System.out.println();
             } catch (final TimeoutException e) {
                 System.out.println("Length "+length+" timed out");
                 return length;
@@ -74,18 +161,16 @@ public class Main {
             length++;
         }
     }
-    public static void normalTest() {
+    public static void normalTest(BiFunction<int[],Integer,int[]> func,BiFunction<int[],Integer,int[]> func2, int loops, int coins, int max, boolean testEquality) {
         long sum1=0, sum2=0;
-        int loops=1000;
         int bars =20;
         for (int i = 0; i < bars; i++) {
             System.out.print("_");
         }
         System.out.println();
+        int length = coins;
         for (int i = 0; i <loops; i++) {
 //            int length = (int)(Math.random()*2)+3;
-            int length = 5;
-            int max = 100;
 
             int[] m = new int[length];
             m[0]=1;
@@ -115,8 +200,8 @@ public class Main {
 
             int[] finalM = m;
             Wrapper s1=new Wrapper(),s2=new Wrapper();
-            var m1 = measure(()->Deprecated.recursiveGoodSpecialLimitHash(finalM,k), s1);
-            var m2 =  measure(()->Deprecated.recursiveGoodSpecialLimitHashHalfed(finalM,k), s2);
+            var m1 = measure(()->func.apply(finalM,k), s1);
+            var m2 =  measure(()->func2.apply(finalM,k), s2);
             if(testEquality&&(sumArray(m,m1)!=k||sumArray(m,m2)!=k||sumArray(m1)!=sumArray(m2))){
                 System.out.print("M: ");
                 print(m);
@@ -474,5 +559,300 @@ public class Main {
             }
         }
         return z1temp;
+    }
+    public static int[] alphaBetaLimit(int[] m, int k){
+        int[] limit = new int[m.length-1];
+        for (int i = 0; i < limit.length; i++) {
+            limit[i]=kgv(m[i],m[i+1])/m[i]-1;
+            for (int j = i+2; j < m.length; j++) {
+                limit[i]=Math.min(limit[i],kgv(m[i],m[j])/m[i]-1);
+            }
+        }
+        int loop = Math.min(m.length-1, m.length-1);
+        int[][] a = new int[loop][];
+        int maxK =0;
+        for (int i = 0; i < loop; i++) {
+            int[] array= new int[limit[i]+1];
+            for (int j = 1; j <= limit[i] ; j++) {
+                int val= m[i] * j;
+                if(maxK < val) maxK= val;
+                array[j] = val;
+            }
+            a[i]=array;
+        }
+        int[][] Am = dynamic(m,maxK+1);
+        for (int i = 0; i < a.length; i++) {
+            int lim = 0;
+            for (int j = 0; j < a[i].length; j++) {
+                lim=Math.max(lim,Am[a[i][j]][i]);
+            }
+            limit[i]=lim;
+        }
+        int[] maxDis = new int[m.length-1];
+        maxDis[0]=m[1]-1;
+        for (int i = 1; i < maxDis.length; i++) {
+            maxDis[i]= maxDis[i-1]+limit[i]*m[i];
+        }
+        return alphaBeta(m,k,m.length-1, maxDis,limit,new int[]{Integer.MAX_VALUE},0);
+    }
+    static long t1=0;
+    static long t2=0;
+    public static int[] alphaBetaKGVs(int[]m,int k){
+        long t = System.nanoTime();
+        int[] kgv = new int[m.length];
+        for (int i = 0; i < kgv.length-1; i++) {
+            kgv[i]=kgv(m[i],m[i+1])/m[i]-1;
+            for (int j = i+2; j < m.length; j++) {
+                kgv[i]=Math.min(kgv[i],kgv(m[i],m[j])/m[i]-1);
+            }
+        }
+//        for (int i = 0; i < kgv.length-1; i++) {
+//            kgv[i]=kgv(m[i],m[i+1])/m[i]-1;
+//        }
+        kgv[kgv.length-1]=k/m[m.length-1];
+        int[] maxDis = new int[m.length-1];
+        maxDis[0]=m[1]-1;
+        for (int i = 1; i < maxDis.length; i++) {
+            maxDis[i]= maxDis[i-1]+kgv[i]*m[i];
+        }
+        t1 += System.nanoTime()-t;
+        t=System.nanoTime();
+        var r =  alphaBeta(m,k,m.length-1, maxDis,kgv, new int[]{Integer.MAX_VALUE},0);
+        t2 += System.nanoTime()-t;
+        return r;
+    }
+
+    public static int getBeta(int[] m, int k,int level,int[] limit,int used,int[]alpha){
+        int beta = used;
+        for(int i=level; i> 0; i--){
+            int max = (int)Math.ceil((double)(k)/(double)(m[i]));
+            max = Math.min(max,limit[i]);
+            beta += max;
+            k -= max * m[i];
+            if(k <=0|| alpha[0] <= beta){return beta;}
+        }
+        beta += k;
+        return beta;
+    }
+    public static int[] alphaBetaKGVs(int[]m,int k,int howMany){
+        long t = System.nanoTime();
+        int[] kgv = new int[m.length];
+        for (int i = 0; i < kgv.length-1; i++) {
+            kgv[i]=kgv(m[i],m[i+1])/m[i]-1;
+            for (int j = i+2; j < Math.min(m.length,howMany+i+2); j++) {
+                kgv[i]=Math.min(kgv[i],kgv(m[i],m[j])/m[i]-1);
+            }
+        }
+//        for (int i = 0; i < kgv.length-1; i++) {
+//            kgv[i]=kgv(m[i],m[i+1])/m[i]-1;
+//        }
+        kgv[kgv.length-1]=k/m[m.length-1];
+        int[] maxDis = new int[m.length-1];
+        maxDis[0]=m[1]-1;
+        for (int i = 1; i < maxDis.length; i++) {
+            maxDis[i]= maxDis[i-1]+kgv[i]*m[i];
+        }
+        t1 += System.nanoTime()-t;
+        t=System.nanoTime();
+        var r =  alphaBeta(m,k,m.length-1, maxDis,kgv, new int[]{Integer.MAX_VALUE},0);
+        t2 += System.nanoTime()-t;
+        return r;
+    }
+    public static int[] alphaBetaKGV(int[]m,int k){
+        long t = System.nanoTime();
+        int[] kgv = new int[m.length];
+        for (int i = 0; i < kgv.length-1; i++) {
+            kgv[i]=kgv(m[i],m[i+1])/m[i]-1;
+        }
+        kgv[kgv.length-1]=k/m[m.length-1];
+        int[] maxDis = new int[m.length-1];
+        maxDis[0]=m[1]-1;
+        for (int i = 1; i < maxDis.length; i++) {
+            maxDis[i]= maxDis[i-1]+kgv[i]*m[i];
+        }
+        t1 += System.nanoTime()-t;
+        t=System.nanoTime();
+        var r =  alphaBeta(m,k,m.length-1, maxDis,kgv, new int[]{Integer.MAX_VALUE},0);
+        t2 += System.nanoTime()-t;
+        return r;
+    }
+    public static int[] alphaBetaNeighbour(int[]m,int k){
+        long t = System.nanoTime();
+        int[] kgv = new int[m.length];
+        for (int i = 0; i < kgv.length-1; i++) {
+            kgv[i]=m[i]*m[i+1]/m[i]-1;
+        }
+        kgv[kgv.length-1]=k/m[m.length-1];
+        int[] maxDis = new int[m.length-1];
+        maxDis[0]=m[1]-1;
+        for (int i = 1; i < maxDis.length; i++) {
+            maxDis[i]= maxDis[i-1]+kgv[i]*m[i];
+        }
+        t1 += System.nanoTime()-t;
+        t=System.nanoTime();
+        var r =  alphaBeta(m,k,m.length-1, maxDis,kgv, new int[]{Integer.MAX_VALUE},0);
+        t2 += System.nanoTime()-t;
+        return r;
+    }
+    public static int[] alphaBeta(int[] m, int k, int level,int[] maxDis,int[] limit,int []alpha, int used){
+        int[] sol = new int[level+1];
+        //Wenn die münze k teil haben wir eine Lösung
+        int div = k/m[level];
+        if(div*m[level]==k) {
+            if(used+div<alpha[0]) {
+//                System.out.println(alpha[0]+ "  " +used + div);
+                alpha[0] = used + div;
+            }
+            sol[level]=div;
+            return sol;
+        }
+        int min = Integer.MAX_VALUE;
+        int minIndex = (Math.max(k-maxDis[level-1],0)+m[level]-1)/m[level];
+        int maxIndex = Math.min(k/m[level],limit[level]);
+        int beta = used+(int)Math.ceil((double)k/(double)m[level]);
+//        int beta= getBeta(m,k,level,limit,used,alpha);
+//        if(beta!=beta2)
+//            System.out.println(beta-beta2);
+         if(alpha[0]<=beta){
+            sol[0]=k;
+            return sol;
+        }
+        //alle möglichkeiten durchprobieren
+        for (int i = maxIndex; i >= minIndex; i--) {
+            int currentValue = i*m[level];
+            int[] partielSol = alphaBeta(m,k-currentValue,level-1, maxDis, limit, alpha,used+i);
+            int sum = i;
+            for (int j = 0; j < partielSol.length; j++) {
+                sum+=partielSol[j];
+            }
+            if(sum<min){
+                min=sum;
+                sol[level]=i;
+                for (int j = 0; j < partielSol.length; j++) {
+                    sol[j]=partielSol[j];
+                }
+            }
+            if(alpha[0]<=beta){
+                break;
+
+            }
+        }
+        return sol;
+    }
+    public static int[] alphaBetaRaw(int[] m, int k){
+        return alphaBetaRaw(m,k,m.length-1,new int[]{Integer.MAX_VALUE},0);
+    }
+    public static int[] alphaBetaRaw(int[] m, int k, int level,int []alpha, int used){
+        int[] sol = new int[level+1];
+        //Wenn die münze k teil haben wir eine Lösung
+        int div = k/m[level];
+        if(div*m[level]==k) {
+            if(used+div<alpha[0]) {
+                alpha[0] = used + div;
+            }
+            sol[level]=div;
+            return sol;
+        }
+        int min = Integer.MAX_VALUE;
+        int minIndex = 0;
+        int maxIndex = k/m[level];
+        int beta = used+(int)Math.ceil((double)k/(double)m[level]);
+        if(alpha[0]<=beta){
+            sol[0]=k;
+            return sol;
+        }
+        //alle möglichkeiten durchprobieren
+        for (int i = maxIndex; i >= minIndex; i--) {
+            int currentValue = i*m[level];
+            int[] partielSol = alphaBetaRaw(m,k-currentValue,level-1, alpha,used+i);
+            int sum = i;
+            for (int j = 0; j < partielSol.length; j++) {
+                sum+=partielSol[j];
+            }
+            if(sum<min){
+                min=sum;
+                sol[level]=i;
+                for (int j = 0; j < partielSol.length; j++) {
+                    sol[j]=partielSol[j];
+                }
+            }
+            if(alpha[0]<=beta){
+                break;
+
+            }
+        }
+        return sol;
+    }
+    public static int[] alphaBetaLimitAlpha(int[]m,int k){
+        long t = System.nanoTime();
+        int[] limit = new int[m.length];
+        for (int i = 0; i < limit.length-1; i++) {
+            limit[i]=kgv(m[i],m[i+1])/m[i]-1;
+            for (int j = i+2; j < m.length; j++) {
+                limit[i]=Math.min(limit[i],kgv(m[i],m[j])/m[i]-1);
+            }
+        }
+        limit[limit.length-1]=k/m[m.length-1];
+        int[] maxDis = new int[m.length-1];
+        maxDis[0]=m[1]-1;
+        for (int i = 1; i < maxDis.length; i++) {
+            maxDis[i]= maxDis[i-1]+limit[i]*m[i];
+        }
+        int maxK =0;
+        int[][] a = new int[m.length-1][];
+        for (int i = 0; i < m.length-1; i++) {
+            int[] array= new int[limit[i]+1];
+            for (int j = 1; j <= limit[i] ; j++) {
+                int val= m[i] * j;
+                if(maxK < val) maxK= val;
+                array[j] = val;
+            }
+            a[i]=array;
+        }
+        HashMap<Integer,int[]> map = new HashMap<>();
+        for (int i = 0; i < a.length; i++) {
+            for (int j = 0; j < a[i].length; j++) {
+                map.put(a[i][j],alphaBeta(m,a[i][j],m.length-1,maxDis,limit,new int[]{Integer.MAX_VALUE},0));
+            }
+        }
+        for (int i = 0; i < a.length; i++) {
+            int lim = 0;
+            for (int j = 0; j < a[i].length; j++) {
+                lim=Math.max(lim,map.get(a[i][j])[i]);
+            }
+            limit[i]=lim;
+        }
+
+        for (int i = 1; i < maxDis.length; i++) {
+            maxDis[i]= maxDis[i-1]+limit[i]*m[i];
+        }
+        t1 += System.nanoTime()-t;
+        t=System.nanoTime();
+        var r=  alphaBeta(m,k,m.length-1, maxDis,limit, new int[]{Integer.MAX_VALUE},0);
+        t2 += System.nanoTime()-t;
+        return r;
+    }
+    static HashMap<Integer, int[]> speedMap = new HashMap<>();
+    public static int[] alphaBetaCombined(int[]m,int k){
+        long t1,t2,t3;
+        t1=System.nanoTime();
+        var r = alphaBetaNeighbour(m, k);
+        t1 = System.nanoTime()-t1;
+        t2= System.nanoTime();
+        var r2 = alphaBetaKGV(m,k);
+        t2 = System.nanoTime()-t2;
+        t3=System.nanoTime();
+        var r3=alphaBetaKGVs(m,k);
+        t3 = System.nanoTime()-t3;
+        var ma = speedMap.get(m.length);
+        if(ma == null) speedMap.put(m.length,ma = new int[3]);
+        if(t1>=t2&&t1>=t3) ma[0]++;
+        else if(t2>=t1&&t2>=t3) ma[1]++;
+        else ma[2]++;
+//        int l = m.length;
+//        if(l<30) return alphaBetaNeighbour(m,k);
+//        if(l<100) return alphaBetaKGV(m,k);
+//        return alphaBetaKGVs(m,k);
+        return r;
     }
 }
