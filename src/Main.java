@@ -25,7 +25,7 @@ public class Main {
 //        normalTest(Main::alphaBeta,Main::recursiveGoodSpecialKgv,1,100,10000,true);
 
 //        specificTest(new int[]{1,6,9,16,22,28,31,34,37,39,46,49,53,57,69,78,81,84,87,89,91,95,98,101,103,104,108,111}, 3468736);
-//        lengthTest((m,k)->recursiveGoodSpecialLimit(m,k), 10000,1000);
+//        lengthTest((m,k)->recursiveGoodSpecialLimit(m,k), 10000,1000);git
 //        lengthTest((m,k)->recursiveGoodSpecialKgv(m,k), 10000,1000);
         lengthTest((m,k)->alphaBetaKGVs(m,k),10000,10000);
 //        benchmarkTest((m,k)->alphaBetaKGVs(m,k,10),"benchHard.txt",true);
